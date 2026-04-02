@@ -13,7 +13,26 @@ const firebaseConfig = {
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const db   = firebase.database();
+const auth = firebase.auth();
+
+/**
+ * 匿名ログインを開始し、Promise を保持する。
+ *
+ * Firebase Realtime Database のデフォルトルールは
+ *   ".read": "auth != null"
+ *   ".write": "auth != null"
+ * のため、認証なしでは全ての読み書きが PERMISSION_DENIED になる。
+ * 匿名ログインで auth != null を満たし、別端末からの join を可能にする。
+ *
+ * ページ読み込み直後に開始するので、ユーザーが名前を入力して
+ * ボタンを押すまでには必ず完了している。
+ */
+const _authReady = auth.signInAnonymously().catch(err => {
+  // Anonymous Auth が Firebase コンソールで無効の場合はここに来る。
+  // その場合はルールを ".read": true / ".write": true に変更する必要がある。
+  console.warn('[Firebase] 匿名ログイン失敗:', err.code);
+});
 
 // ============================================================
 // CONSTANTS
@@ -178,33 +197,65 @@ function cleanup() {
 // ============================================================
 // FIREBASE ONLINE SYNC
 // ============================================================
-let _fbRef = null; // アクティブな Firebase リスナー参照
+let _fbRef     = null;  // アクティブな Firebase リスナー参照
+let _fbHasData = false; // 初回 null（新規パス）と「ホスト退出」を区別するフラグ
+
+/**
+ * Firebase から受け取ったルームデータを正規化する。
+ *
+ * Firebase Realtime Database は JavaScript の配列を
+ * {"0": ..., "1": ..., "2": ...} のオブジェクトとして保存・返却する。
+ * そのまま使うと .forEach / .filter / .every / .map が全て壊れるため、
+ * 受信直後に配列へ戻す。
+ */
+function normalizeRoom(data) {
+  if (!data) return null;
+  if (data.field && !Array.isArray(data.field)) {
+    data.field = Object.values(data.field);
+  }
+  if (data.players) {
+    Object.values(data.players).forEach(p => {
+      if (p.hand && !Array.isArray(p.hand)) {
+        p.hand = Object.values(p.hand);
+      }
+    });
+  }
+  return data;
+}
 
 /**
  * ルーム状態を Firebase に書き込む。
- * _writer に自分の myId を付与することで、リスナー側が
- * 「自分が書いた更新」を識別してスキップできるようにする。
+ * _writer に自分の myId を付与し、リスナー側が自分の書き込みを
+ * スキップできるようにする（エコーループ防止）。
  */
 function pushToFirebase(r) {
   if (!db || !r?.id) return;
   db.ref(`rooms/${r.id}/state`).set({ ...r, _writer: myId })
-    .catch(err => console.error('[Firebase] write error:', err));
+    .catch(err => {
+      console.error('[Firebase] write error:', err);
+      if (err.code === 'PERMISSION_DENIED') {
+        showToast('Firebase 書き込み権限エラー — コンソールでルールを確認してください', 'error');
+      }
+    });
 }
 
 /**
- * 指定ルームの Firebase 変更を監視し始める。
+ * 指定ルームの Firebase 変更を監視する。
  * 別ブラウザ／デバイスのプレイヤーが書いた更新を受け取り
  * ローカル状態と UI を同期する。
  */
 function startFirebaseListener(rid) {
   stopFirebaseListener();
+  _fbHasData = false;
   _fbRef = db.ref(`rooms/${rid}/state`);
   _fbRef.on('value', snap => {
     const data = snap.val();
 
-    // ルームが削除された（別ブラウザのホストが退出）
     if (!data) {
-      if (room) {
+      // 新規作成直後は Firebase にまだデータが無いため最初の null は無視する。
+      // _fbHasData が true（一度でもデータを受け取った後）の null は
+      // ホストが別端末から退出した合図として扱う。
+      if (_fbHasData && room) {
         showToast('ホストが退出しました', 'warn');
         cleanup();
         showScreen('lobby');
@@ -212,13 +263,17 @@ function startFirebaseListener(rid) {
       return;
     }
 
+    _fbHasData = true;
+
     // 自分自身が書いた更新はすでにローカル適用済みなのでスキップ
     if (data._writer === myId) return;
 
+    // Firebase が配列をオブジェクトに変換している場合に復元する
+    const normalized = normalizeRoom(data);
     const prev = room?.phase;
-    room = data;
+    room = normalized;
     // 既存の loadRoom() が localStorage を参照するので合わせて更新
-    localStorage.setItem(STORE_PFX + rid, JSON.stringify(data));
+    localStorage.setItem(STORE_PFX + rid, JSON.stringify(normalized));
     onPhaseChange(prev, room.phase);
   });
 }
@@ -226,6 +281,7 @@ function startFirebaseListener(rid) {
 /** Firebase リスナーを解除する（退出・クリーンアップ時）。 */
 function stopFirebaseListener() {
   if (_fbRef) { _fbRef.off(); _fbRef = null; }
+  _fbHasData = false;
 }
 
 // ============================================================
@@ -286,15 +342,24 @@ async function doJoin() {
   if (!name) { showToast('名前を入力してください', 'warn'); return; }
   if (!rid)  { showToast('ルームIDを入力してください', 'warn'); return; }
 
-  // 同一ブラウザなら localStorage から、別ブラウザなら Firebase から取得
+  // 同一ブラウザなら localStorage から、別ブラウザ／端末なら Firebase から取得
   let r = loadRoom(rid);
   if (!r) {
     try {
       showToast('ルームを検索中...', '');
+      // 匿名ログインが完了してから読み込む（auth != null ルール対応）
+      await _authReady;
       const snap = await db.ref(`rooms/${rid}/state`).once('value');
-      r = snap.val();
+      // Firebase は配列をオブジェクトに変換するため正規化が必要
+      r = normalizeRoom(snap.val());
     } catch (err) {
       console.error('[Firebase] join fetch error:', err);
+      if (err.code === 'PERMISSION_DENIED') {
+        showToast('Firebase 権限エラー — データベースのルール設定を確認してください', 'error');
+      } else {
+        showToast('接続エラー: ' + (err.message || err.code), 'error');
+      }
+      return;
     }
   }
 
