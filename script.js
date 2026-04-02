@@ -223,10 +223,12 @@ function startFirebaseListener(rid) {
     // 自分自身が書いた更新はすでにローカル適用済みなのでスキップ
     if (data._writer === myId) return;
 
+    // Firebase は配列をオブジェクトに変換するため、配列に復元してから使う
+    const normalized = normalizeRoom(data);
     const prev = room?.phase;
-    room = data;
+    room = normalized;
     // 既存の loadRoom() が localStorage を参照するので合わせて更新
-    localStorage.setItem(STORE_PFX + rid, JSON.stringify(data));
+    localStorage.setItem(STORE_PFX + rid, JSON.stringify(normalized));
     onPhaseChange(prev, room.phase);
   });
 }
@@ -235,6 +237,31 @@ function startFirebaseListener(rid) {
 function stopFirebaseListener() {
   if (_fbRef) { _fbRef.off(); _fbRef = null; }
   _fbHasData = false;
+}
+
+/**
+ * Firebase から受け取ったルームデータを正規化する。
+ *
+ * 【重要】Firebase Realtime Database は JavaScript の配列を
+ * {"0": ..., "1": ..., "2": ...} のようなオブジェクトに変換して返す。
+ * そのまま使うと .forEach / .filter / .every / .map 等が壊れるため、
+ * 配列に戻してから使用する必要がある。
+ */
+function normalizeRoom(data) {
+  if (!data) return null;
+  // field 配列の復元
+  if (data.field && !Array.isArray(data.field)) {
+    data.field = Object.values(data.field);
+  }
+  // 各プレイヤーの hand 配列の復元
+  if (data.players) {
+    Object.values(data.players).forEach(p => {
+      if (p.hand && !Array.isArray(p.hand)) {
+        p.hand = Object.values(p.hand);
+      }
+    });
+  }
+  return data;
 }
 
 // ============================================================
@@ -301,9 +328,17 @@ async function doJoin() {
     try {
       showToast('ルームを検索中...', '');
       const snap = await db.ref(`rooms/${rid}/state`).once('value');
-      r = snap.val();
+      // Firebase は配列をオブジェクトに変換するため正規化が必要
+      r = normalizeRoom(snap.val());
     } catch (err) {
       console.error('[Firebase] join fetch error:', err);
+      // PERMISSION_DENIED はルール設定の問題として分かりやすく案内する
+      if (err.code === 'PERMISSION_DENIED') {
+        showToast('Firebase の権限エラーです。データベースのルールを確認してください。', 'error');
+      } else {
+        showToast('Firebase 接続エラー: ' + (err.message || err.code), 'error');
+      }
+      return;
     }
   }
 
