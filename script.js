@@ -213,6 +213,16 @@ function normalizeRoom(data) {
   if (data.field && !Array.isArray(data.field)) {
     data.field = Object.values(data.field);
   }
+  // Firebase は null 値をオブジェクトから削除して保存する。
+  // そのため slot.val / slot.owner が undefined になって返ってくる。
+  // undefined === null は false なので「埋まっている」と誤判定されるのを防ぐ。
+  if (Array.isArray(data.field)) {
+    data.field = data.field.map(slot => ({
+      val:      slot.val      ?? null,
+      owner:    slot.owner    ?? null,
+      revealed: slot.revealed ?? false,
+    }));
+  }
   if (data.players) {
     Object.values(data.players).forEach(p => {
       if (p.hand && !Array.isArray(p.hand)) {
