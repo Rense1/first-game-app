@@ -642,18 +642,12 @@ function renderField() {
       }
 
     } else {
-      // Playing phase
+      // Playing phase — どちらのプレイヤーのカードも表向きで表示し、移動可能にする
       const isMine = slot.owner === myId;
       const isSel  = sel?.src === 'field' && sel.idx === idx;
-      if (isMine) {
-        node.className = 'card card-face' + (isSel ? ' card-selected' : '');
-        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
-        // 自分のカードにのみクリックリスナーを付ける（相手カードは操作不可）
-        node.addEventListener('click', () => onFieldClick(idx));
-      } else {
-        node.className = 'card card-back';
-        node.innerHTML = `<span class="card-pos">${idx + 1}</span>`;
-      }
+      node.className = 'card card-face' + (isSel ? ' card-selected' : '') + (isMine ? '' : ' card-opp');
+      node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+      node.addEventListener('click', () => onFieldClick(idx));
     }
 
     container.appendChild(node);
@@ -681,8 +675,8 @@ function onFieldClick(idx) {
   const slot = room.field[idx];
 
   if (!sel) {
-    // 自分のカードのみ選択可能（相手のカードは移動不可）
-    if (slot.val !== null && slot.owner === myId) {
+    // フィールド上のカードはどちらのプレイヤーでも選択・移動可能
+    if (slot.val !== null) {
       sel = { src: 'field', val: slot.val, idx };
       renderGame();
     }
