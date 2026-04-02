@@ -270,6 +270,14 @@ function startFirebaseListener(rid) {
 
     // Firebase が配列をオブジェクトに変換している場合に復元する
     const normalized = normalizeRoom(data);
+
+    // 自分のプレイヤーデータ（手札・FA状態）はローカルを正とし、
+    // 相手の古いスナップショットで上書きされないよう保護する。
+    // カード配置直後に相手の更新が届くと手札が巻き戻るレースコンディション対策。
+    if (room?.players?.[myId] && normalized.players?.[myId]) {
+      normalized.players[myId] = room.players[myId];
+    }
+
     const prev = room?.phase;
     room = normalized;
     // 既存の loadRoom() が localStorage を参照するので合わせて更新
@@ -491,7 +499,8 @@ function confirmTopic() {
 // GAME — start / deal
 // ============================================================
 function startGame(topic) {
-  const r = loadRoom(roomId); // always fresh read before dealing
+  // localStorage が消えている場合に備えてインメモリの room にフォールバック
+  const r = loadRoom(roomId) || room;
   const { cardCount } = r.settings;
   const players = Object.values(r.players);
 
@@ -629,11 +638,12 @@ function renderField() {
       if (isMine) {
         node.className = 'card card-face' + (isSel ? ' card-selected' : '');
         node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+        // 自分のカードにのみクリックリスナーを付ける（相手カードは操作不可）
+        node.addEventListener('click', () => onFieldClick(idx));
       } else {
-        node.className = 'card card-back' + (isSel ? ' card-selected' : '');
+        node.className = 'card card-back';
         node.innerHTML = `<span class="card-pos">${idx + 1}</span>`;
       }
-      node.addEventListener('click', () => onFieldClick(idx));
     }
 
     container.appendChild(node);
@@ -661,8 +671,8 @@ function onFieldClick(idx) {
   const slot = room.field[idx];
 
   if (!sel) {
-    // Select an existing field card
-    if (slot.val !== null) {
+    // 自分のカードのみ選択可能（相手のカードは移動不可）
+    if (slot.val !== null && slot.owner === myId) {
       sel = { src: 'field', val: slot.val, idx };
       renderGame();
     }
