@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORDER — 数字並べゲーム</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" data-screen="lobby">
+
+  <!-- ==================== LOBBY ==================== -->
+  <section id="screen-lobby" class="screen">
+    <div class="lobby-bg"></div>
+    <div class="lobby-content">
+      <div class="logo-area">
+        <h1 class="logo-title">ORDER</h1>
+        <p class="logo-sub">2人で遊ぶ数字並べゲーム</p>
+      </div>
+      <div class="panel">
+        <div class="form-group">
+          <label class="form-label" for="inp-name">プレイヤー名</label>
+          <input id="inp-name" class="form-input" type="text" placeholder="名前を入力..." maxlength="16" autocomplete="off">
+        </div>
+        <button id="btn-create" class="btn btn-primary btn-block">
+          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 2L2 7v11h5v-6h6v6h5V7L10 2z"/>
+          </svg>
+          ルームを作る
+        </button>
+        <div class="or-div"><span>または</span></div>
+        <div class="join-row">
+          <input id="inp-room-id" class="form-input form-mono" type="text"
+                 placeholder="ROOM ID" maxlength="6" autocomplete="off">
+          <button id="btn-join" class="btn btn-secondary">参加</button>
+        </div>
+      </div>
+      <p class="lobby-note">同じブラウザで2タブ開いて遊んでください</p>
+    </div>
+  </section>
+
+  <!-- ==================== ROOM ==================== -->
+  <section id="screen-room" class="screen">
+    <div class="room-wrap">
+      <div class="room-topbar">
+        <h2 class="room-heading">待機室</h2>
+        <div class="rid-badge">
+          <span class="rid-label">ROOM</span>
+          <span class="rid-value" id="rid-display">------</span>
+          <button class="icon-btn" id="btn-copy-rid" title="コピー">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="players-row">
+        <div class="pcard" id="pcard-host">
+          <div class="pcard-crown">👑</div>
+          <div class="pcard-name" id="pname-host">---</div>
+          <div class="pcard-role host-role">ホスト</div>
+        </div>
+        <div class="vs-badge">VS</div>
+        <div class="pcard pcard-empty" id="pcard-guest">
+          <div class="pcard-crown">⏳</div>
+          <div class="pcard-name" id="pname-guest">参加待ち...</div>
+          <div class="pcard-role">プレイヤー2</div>
+        </div>
+      </div>
+
+      <div class="settings-box" id="settings-host">
+        <div class="settings-title">設定</div>
+        <div class="settings-row">
+          <span class="settings-name">配布カード枚数</span>
+          <div class="stepper">
+            <button class="stepper-btn" id="btn-cards-dec">−</button>
+            <span class="stepper-val" id="cards-display">3</span>
+            <button class="stepper-btn" id="btn-cards-inc">＋</button>
+          </div>
+          <span class="settings-unit">枚 / 人</span>
+        </div>
+      </div>
+
+      <div class="settings-box" id="settings-guest" style="display:none">
+        <div class="settings-title">設定</div>
+        <div class="settings-row">
+          <span class="settings-name">配布カード枚数</span>
+          <span class="settings-ro-val" id="cards-display-guest">3</span>
+          <span class="settings-unit">枚 / 人</span>
+        </div>
+        <p class="settings-note">※ ホストのみ変更できます</p>
+      </div>
+
+      <div class="room-foot">
+        <button class="btn btn-primary btn-lg" id="btn-start" disabled>ゲーム開始</button>
+        <p class="wait-msg" id="wait-msg">もう1人の参加を待っています...</p>
+        <button class="btn btn-ghost" id="btn-leave-room">退出する</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== GAME ==================== -->
+  <section id="screen-game" class="screen">
+    <div class="game-layout">
+
+      <!-- Topbar -->
+      <div class="game-topbar">
+        <div class="gtop-left">
+          <span class="gtop-rid-text">ROOM</span>
+          <span class="gtop-rid" id="gtop-rid">---</span>
+          <button class="copy-btn-sm" id="btn-copy-gid" title="コピー">⧉</button>
+        </div>
+        <div class="gtop-center">
+          <span class="topic-tag">お題：</span>
+          <span class="topic-text" id="gtop-topic">---</span>
+        </div>
+        <div class="gtop-right">
+          <span class="phase-badge" id="gtop-phase">配置中</span>
+        </div>
+      </div>
+
+      <!-- Opponent zone -->
+      <div class="game-zone opp-zone">
+        <div class="zone-header">
+          <span class="zone-label">相手の手札</span>
+          <span class="zone-count" id="opp-count">0枚</span>
+          <span class="fa-indicator hidden" id="opp-fa-ind">✓ FA済み</span>
+        </div>
+        <div class="hand-row" id="opp-hand"></div>
+      </div>
+
+      <!-- Field zone -->
+      <div class="game-zone field-zone">
+        <div class="zone-header">
+          <span class="zone-label">フィールド</span>
+          <span class="zone-count" id="field-count">0 / 0</span>
+          <span class="field-hint" id="field-hint">カードを選んでスロットに置こう</span>
+        </div>
+        <div class="field-slots" id="field-slots"></div>
+      </div>
+
+      <!-- My zone -->
+      <div class="game-zone my-zone">
+        <div class="zone-header">
+          <span class="zone-label">あなたの手札</span>
+          <span class="zone-count" id="my-count">0枚</span>
+          <span class="fa-indicator hidden" id="my-fa-ind">✓ FA済み</span>
+        </div>
+        <div class="hand-row" id="my-hand"></div>
+        <div class="my-actions">
+          <button class="btn-fa" id="btn-fa" disabled>
+            ファイナル<br>アンサー
+          </button>
+          <button class="btn btn-gold btn-lg hidden" id="btn-kokai">
+            公開 →
+          </button>
+          <span class="reveal-waiting hidden" id="reveal-waiting-msg">
+            ホストが公開しています...
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== RESULT ==================== -->
+  <section id="screen-result" class="screen">
+    <div class="result-page">
+      <div class="result-emblem" id="result-emblem">
+        <div class="result-ring"></div>
+        <div class="result-icon" id="result-icon">?</div>
+      </div>
+      <h2 class="result-title" id="result-title">---</h2>
+      <p class="result-sub" id="result-sub">---</p>
+      <div class="result-field" id="result-field"></div>
+      <div class="result-actions">
+        <button class="btn btn-primary btn-lg" id="btn-continue">続ける</button>
+        <button class="btn btn-ghost btn-lg" id="btn-exit">退出</button>
+      </div>
+    </div>
+  </section>
+
+</div><!-- #app -->
+
+<!-- ==================== TOPIC MODAL ==================== -->
+<div id="modal-topic" class="modal hidden">
+  <div class="modal-backdrop" id="modal-backdrop"></div>
+  <div class="modal-box">
+    <h3 class="modal-title">お題を設定</h3>
+    <p class="modal-hint">プレイヤーが自分の数字を表現するためのテーマです</p>
+    <input id="inp-topic" class="form-input" type="text"
+           placeholder="例：小学校でどれくらいモテるか" maxlength="60" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="btn-random-topic">🎲 ランダム</button>
+      <button class="btn btn-primary" id="btn-confirm-topic">決定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TOAST ==================== -->
+<div id="toast" class="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
