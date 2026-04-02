@@ -178,7 +178,8 @@ function cleanup() {
 // ============================================================
 // FIREBASE ONLINE SYNC
 // ============================================================
-let _fbRef = null; // アクティブな Firebase リスナー参照
+let _fbRef = null;     // アクティブな Firebase リスナー参照
+let _fbHasData = false; // 一度でも有効なデータを受信したか
 
 /**
  * ルーム状態を Firebase に書き込む。
@@ -188,7 +189,10 @@ let _fbRef = null; // アクティブな Firebase リスナー参照
 function pushToFirebase(r) {
   if (!db || !r?.id) return;
   db.ref(`rooms/${r.id}/state`).set({ ...r, _writer: myId })
-    .catch(err => console.error('[Firebase] write error:', err));
+    .catch(err => {
+      console.error('[Firebase] write error:', err);
+      showToast('Firebase 書き込みエラー（コンソール確認）', 'error');
+    });
 }
 
 /**
@@ -198,19 +202,23 @@ function pushToFirebase(r) {
  */
 function startFirebaseListener(rid) {
   stopFirebaseListener();
+  _fbHasData = false;
   _fbRef = db.ref(`rooms/${rid}/state`);
   _fbRef.on('value', snap => {
     const data = snap.val();
 
     // ルームが削除された（別ブラウザのホストが退出）
+    // ただし一度もデータを受信していない初回 null は無視する
     if (!data) {
-      if (room) {
+      if (_fbHasData && room) {
         showToast('ホストが退出しました', 'warn');
         cleanup();
         showScreen('lobby');
       }
       return;
     }
+
+    _fbHasData = true;
 
     // 自分自身が書いた更新はすでにローカル適用済みなのでスキップ
     if (data._writer === myId) return;
@@ -226,6 +234,7 @@ function startFirebaseListener(rid) {
 /** Firebase リスナーを解除する（退出・クリーンアップ時）。 */
 function stopFirebaseListener() {
   if (_fbRef) { _fbRef.off(); _fbRef = null; }
+  _fbHasData = false;
 }
 
 // ============================================================
