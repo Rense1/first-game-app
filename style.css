@@ -528,15 +528,6 @@ body {
 .card-sm { width: 38px; height: 54px; }
 .card-sm .card-num { font-size: 15px; }
 
-/* Opponent's field card — same face-up style, but with a subtle blue tint
-   so players can visually distinguish who placed which card */
-.card-opp {
-  background: #eef2ff;
-  border-color: #a5b4fc;
-}
-.card-opp .card-num { color: #3730a3; }
-.card-opp .card-pos { color: #6366f1; }
-
 /* Selected glow */
 .card-selected {
   transform: translateY(-7px) !important;

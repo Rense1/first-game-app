@@ -642,11 +642,19 @@ function renderField() {
       }
 
     } else {
-      // Playing phase — どちらのプレイヤーのカードも表向きで表示し、移動可能にする
+      // Playing phase
+      // 自分のカード → 表向き（数字を表示）
+      // 相手のカード → 裏向き（数字を非公開）
+      // どちらのカードも移動・入れ替え可能なのでリスナーは全スロットに付ける
       const isMine = slot.owner === myId;
       const isSel  = sel?.src === 'field' && sel.idx === idx;
-      node.className = 'card card-face' + (isSel ? ' card-selected' : '') + (isMine ? '' : ' card-opp');
-      node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+      if (isMine) {
+        node.className = 'card card-face' + (isSel ? ' card-selected' : '');
+        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+      } else {
+        node.className = 'card card-back' + (isSel ? ' card-selected' : '');
+        node.innerHTML = `<span class="card-pos">${idx + 1}</span>`;
+      }
       node.addEventListener('click', () => onFieldClick(idx));
     }
 
