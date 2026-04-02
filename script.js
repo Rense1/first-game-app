@@ -1,5 +1,20 @@
 'use strict';
 
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDqk5M_BYqn4NM5GNCnK1VHrHl9NrS36BI",
+  authDomain: "order-online-ed76f.firebaseapp.com",
+  databaseURL: "https://order-online-ed76f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "order-online-ed76f",
+  storageBucket: "order-online-ed76f.firebasestorage.app",
+  messagingSenderId: "225638064120",
+  appId: "1:225638064120:web:faef65bf1c1c384e30000d"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 // ============================================================
 // CONSTANTS
 // ============================================================
@@ -114,6 +129,7 @@ function saveRoom(r) {
   r.ts = Date.now();
   localStorage.setItem(STORE_PFX + r.id, JSON.stringify(r));
   bc?.postMessage({ type: 'sync', roomId: r.id });
+  pushToFirebase(r); // オンライン同期：変更を Firebase に push
 }
 function loadRoom(rid) {
   try   { const raw = localStorage.getItem(STORE_PFX + rid); return raw ? JSON.parse(raw) : null; }
@@ -155,7 +171,61 @@ function initBC() {
 
 function cleanup() {
   bc?.close(); bc = null;
+  stopFirebaseListener(); // Firebase リスナーも解除
   roomId = null; room = null; sel = null;
+}
+
+// ============================================================
+// FIREBASE ONLINE SYNC
+// ============================================================
+let _fbRef = null; // アクティブな Firebase リスナー参照
+
+/**
+ * ルーム状態を Firebase に書き込む。
+ * _writer に自分の myId を付与することで、リスナー側が
+ * 「自分が書いた更新」を識別してスキップできるようにする。
+ */
+function pushToFirebase(r) {
+  if (!db || !r?.id) return;
+  db.ref(`rooms/${r.id}/state`).set({ ...r, _writer: myId })
+    .catch(err => console.error('[Firebase] write error:', err));
+}
+
+/**
+ * 指定ルームの Firebase 変更を監視し始める。
+ * 別ブラウザ／デバイスのプレイヤーが書いた更新を受け取り
+ * ローカル状態と UI を同期する。
+ */
+function startFirebaseListener(rid) {
+  stopFirebaseListener();
+  _fbRef = db.ref(`rooms/${rid}/state`);
+  _fbRef.on('value', snap => {
+    const data = snap.val();
+
+    // ルームが削除された（別ブラウザのホストが退出）
+    if (!data) {
+      if (room) {
+        showToast('ホストが退出しました', 'warn');
+        cleanup();
+        showScreen('lobby');
+      }
+      return;
+    }
+
+    // 自分自身が書いた更新はすでにローカル適用済みなのでスキップ
+    if (data._writer === myId) return;
+
+    const prev = room?.phase;
+    room = data;
+    // 既存の loadRoom() が localStorage を参照するので合わせて更新
+    localStorage.setItem(STORE_PFX + rid, JSON.stringify(data));
+    onPhaseChange(prev, room.phase);
+  });
+}
+
+/** Firebase リスナーを解除する（退出・クリーンアップ時）。 */
+function stopFirebaseListener() {
+  if (_fbRef) { _fbRef.off(); _fbRef = null; }
 }
 
 // ============================================================
@@ -198,6 +268,7 @@ el('btn-create').addEventListener('click', () => {
 
   saveRoom(room);
   initBC();
+  startFirebaseListener(roomId); // Firebase 監視開始
   showScreen('room');
   renderRoom();
 });
@@ -209,13 +280,24 @@ el('btn-join').addEventListener('click', doJoin);
 el('inp-room-id').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
 el('inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') el('inp-room-id').focus(); });
 
-function doJoin() {
+async function doJoin() {
   const name = el('inp-name').value.trim();
   const rid  = el('inp-room-id').value.trim().toUpperCase();
   if (!name) { showToast('名前を入力してください', 'warn'); return; }
   if (!rid)  { showToast('ルームIDを入力してください', 'warn'); return; }
 
-  const r = loadRoom(rid);
+  // 同一ブラウザなら localStorage から、別ブラウザなら Firebase から取得
+  let r = loadRoom(rid);
+  if (!r) {
+    try {
+      showToast('ルームを検索中...', '');
+      const snap = await db.ref(`rooms/${rid}/state`).once('value');
+      r = snap.val();
+    } catch (err) {
+      console.error('[Firebase] join fetch error:', err);
+    }
+  }
+
   if (!r)                                    { showToast('ルームが見つかりません', 'error'); return; }
   if (Object.keys(r.players).length >= 2)    { showToast('ルームが満員です', 'error'); return; }
   if (r.phase !== 'waiting')                 { showToast('ゲームはすでに始まっています', 'error'); return; }
@@ -225,6 +307,7 @@ function doJoin() {
   saveRoom(r);
   room = r;
   initBC();
+  startFirebaseListener(roomId); // Firebase 監視開始
   showScreen('room');
   renderRoom();
 }
@@ -305,6 +388,7 @@ function leaveRoom() {
   if (room.hostId === myId) {
     deleteRoom(roomId);
     bc?.postMessage({ type: 'closed', roomId });
+    db.ref(`rooms/${roomId}/state`).remove().catch(() => {}); // Firebase も削除
   } else {
     const r = loadRoom(roomId) || room;
     delete r.players[myId];
