@@ -544,7 +544,7 @@ body {
 .card-face .card-pos { color: #666; }
 .card-back .card-pos { color: rgba(255,255,255,0.5); }
 
-/* Alphabet identifier on face-down cards */
+/* Alphabet identifier on face-down cards (centered) */
 .card-label {
   position: absolute;
   top: 50%; left: 50%;
@@ -552,6 +552,13 @@ body {
   font-size: 22px; font-weight: 900; line-height: 1;
   color: rgba(255, 255, 255, 0.85);
   pointer-events: none;
+}
+/* Alphabet identifier on face-up cards (top-right, unobtrusive) */
+.card-face .card-label {
+  top: 4px; right: 6px;
+  left: auto; transform: none;
+  font-size: 11px;
+  color: rgba(26, 26, 46, 0.45);
 }
 
 /* Reveal animation */
