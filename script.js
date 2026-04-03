@@ -290,6 +290,14 @@ function startFirebaseListener(rid) {
       if (!local.labels && normalized.players[myId].labels) {
         local.labels = normalized.players[myId].labels;
       }
+      // waiting→playing への移行時（＝ホストによるゲーム開始）に、
+      // ローカルの手札がまだ空でFirebase側に配られた手札がある場合は引き継ぐ。
+      // ゲスト側はカード配布後もローカルが hand:[] のままになるレースコンディション対策。
+      if (room.phase === 'waiting' && normalized.phase === 'playing'
+          && (!local.hand || local.hand.length === 0)
+          && normalized.players[myId].hand?.length > 0) {
+        local.hand = normalized.players[myId].hand;
+      }
       normalized.players[myId] = local;
     }
 
