@@ -285,7 +285,12 @@ function startFirebaseListener(rid) {
     // 相手の古いスナップショットで上書きされないよう保護する。
     // カード配置直後に相手の更新が届くと手札が巻き戻るレースコンディション対策。
     if (room?.players?.[myId] && normalized.players?.[myId]) {
-      normalized.players[myId] = room.players[myId];
+      const local = room.players[myId];
+      // ゲーム開始時にホストが生成したラベルマップをローカルに持っていない場合は引き継ぐ
+      if (!local.labels && normalized.players[myId].labels) {
+        local.labels = normalized.players[myId].labels;
+      }
+      normalized.players[myId] = local;
     }
 
     const prev = room?.phase;
@@ -520,6 +525,15 @@ function startGame(topic) {
   players[1].hand = deck.slice(cardCount, cardCount * 2).sort((a, b) => a - b);
   players.forEach(p => { p.finalAnswer = false; });
 
+  // Assign alphabet labels to each card for identification on card backs.
+  // Host's cards get A, B, C, ... and guest's cards get the next letters.
+  const hostPlayer  = players.find(p => p.id === r.hostId);
+  const guestPlayer = players.find(p => p.id !== r.hostId);
+  hostPlayer.labels  = {};
+  hostPlayer.hand.forEach((val, i) => { hostPlayer.labels[val]  = String.fromCharCode(65 + i); });
+  guestPlayer.labels = {};
+  guestPlayer.hand.forEach((val, i) => { guestPlayer.labels[val] = String.fromCharCode(65 + cardCount + i); });
+
   r.field = Array.from({ length: cardCount * 2 }, () => ({ val: null, owner: null, revealed: false }));
   r.settings.topic = topic;
   r.phase = 'playing';
@@ -638,7 +652,8 @@ function renderField() {
         node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
       } else {
         node.className = 'card card-back';
-        node.innerHTML = `<span class="card-pos">${idx + 1}</span>`;
+        const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
+        node.innerHTML = `<span class="card-label">${label}</span><span class="card-pos">${idx + 1}</span>`;
       }
 
     } else {
@@ -653,7 +668,8 @@ function renderField() {
         node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
       } else {
         node.className = 'card card-back' + (isSel ? ' card-selected' : '');
-        node.innerHTML = `<span class="card-pos">${idx + 1}</span>`;
+        const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
+        node.innerHTML = `<span class="card-label">${label}</span><span class="card-pos">${idx + 1}</span>`;
       }
       node.addEventListener('click', () => onFieldClick(idx));
     }

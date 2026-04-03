@@ -544,6 +544,16 @@ body {
 .card-face .card-pos { color: #666; }
 .card-back .card-pos { color: rgba(255,255,255,0.5); }
 
+/* Alphabet identifier on face-down cards */
+.card-label {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px; font-weight: 900; line-height: 1;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+
 /* Reveal animation */
 .card-revealed { animation: flip-in 0.45s cubic-bezier(0.34, 1.2, 0.64, 1) both; }
 @keyframes flip-in {
