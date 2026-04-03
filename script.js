@@ -649,7 +649,8 @@ function renderField() {
       // Reveal phase
       if (slot.revealed) {
         node.className = 'card card-face card-revealed';
-        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+        const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
+        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-label">${label}</span><span class="card-pos">${idx + 1}</span>`;
       } else {
         node.className = 'card card-back';
         const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
@@ -665,7 +666,8 @@ function renderField() {
       const isSel  = sel?.src === 'field' && sel.idx === idx;
       if (isMine) {
         node.className = 'card card-face' + (isSel ? ' card-selected' : '');
-        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-pos">${idx + 1}</span>`;
+        const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
+        node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-label">${label}</span><span class="card-pos">${idx + 1}</span>`;
       } else {
         node.className = 'card card-back' + (isSel ? ' card-selected' : '');
         const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
