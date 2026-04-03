@@ -664,7 +664,7 @@ function renderField() {
       // どちらのカードも移動・入れ替え可能なのでリスナーは全スロットに付ける
       const isMine = slot.owner === myId;
       const isSel  = sel?.src === 'field' && sel.idx === idx;
-      if (isMine) {
+      if (isMine || slot.revealed) {
         node.className = 'card card-face' + (isSel ? ' card-selected' : '');
         const label = room.players[slot.owner]?.labels?.[slot.val] ?? '';
         node.innerHTML = `<span class="card-num">${slot.val}</span><span class="card-label">${label}</span><span class="card-pos">${idx + 1}</span>`;
