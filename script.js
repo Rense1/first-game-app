@@ -286,18 +286,28 @@ function startFirebaseListener(rid) {
     // カード配置直後に相手の更新が届くと手札が巻き戻るレースコンディション対策。
     if (room?.players?.[myId] && normalized.players?.[myId]) {
       const local = room.players[myId];
-      // ゲーム開始時にホストが生成したラベルマップをローカルに持っていない場合は引き継ぐ
-      if (!local.labels && normalized.players[myId].labels) {
-        local.labels = normalized.players[myId].labels;
+
+      if (room.phase === 'waiting' && normalized.phase === 'playing') {
+        // waiting→playing への移行（＝ホストによるゲーム開始）は、
+        // ホストが生成した手札・ラベル・FA状態を信頼してローカルに引き継ぐ。
+        // 保護ロジックでゲーム開始前の古い値（空手札・古いラベル・true のFA）が
+        // 残らないよう、この遷移に限り Firebase 側の値を優先する。
+        if (normalized.players[myId].labels) {
+          local.labels = normalized.players[myId].labels;
+        }
+        if ((!local.hand || local.hand.length === 0)
+            && normalized.players[myId].hand?.length > 0) {
+          local.hand = normalized.players[myId].hand;
+        }
+        local.finalAnswer = false;
+      } else {
+        // ゲーム開始以外の通常更新：手札・FA はローカルを正として保護。
+        // ラベルはまだ持っていなければ（初回のみ）引き継ぐ。
+        if (!local.labels && normalized.players[myId].labels) {
+          local.labels = normalized.players[myId].labels;
+        }
       }
-      // waiting→playing への移行時（＝ホストによるゲーム開始）に、
-      // ローカルの手札がまだ空でFirebase側に配られた手札がある場合は引き継ぐ。
-      // ゲスト側はカード配布後もローカルが hand:[] のままになるレースコンディション対策。
-      if (room.phase === 'waiting' && normalized.phase === 'playing'
-          && (!local.hand || local.hand.length === 0)
-          && normalized.players[myId].hand?.length > 0) {
-        local.hand = normalized.players[myId].hand;
-      }
+
       normalized.players[myId] = local;
     }
 
